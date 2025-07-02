@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browning Strike Force DCL 模擬器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&family=Roboto+Condensed:wght@500;600&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #374151;
+            -webkit-user-select: none; user-select: none;
+            touch-action: manipulation;
+        }
+
+        html.fonts-loading .camera-body {
+            visibility: hidden;
+        }
+        
+        /* ✨ MODIFIED: New modern, sleek design for the camera body */
+        .camera-body {
+            background: linear-gradient(145deg, #4a5568, #2d3748);
+            border: 1px solid #718096;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1);
+        }
+        
+        .screen-container {
+            background-color: #1a202c;
+            padding: 10px;
+            border-radius: 0.5rem;
+            border: 1px solid #4a5568;
+        }
+
+        .screen {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            border: 2px solid #1a202c;
+            height: 250px;
+            font-family: 'Roboto Condensed', sans-serif;
+            letter-spacing: 0.05em;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        #live-video, #playback-image, #playback-video {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: cover; z-index: 1; display: none;
+        }
+        #playback-image, #playback-video { object-fit: contain; }
+        #live-video { transform: scaleX(-1); }
+        
+        #screen-overlay { position: relative; z-index: 2; width: 100%; height: 100%; }
+
+        .screen-content {
+            background-color: transparent;
+            width: 100%; height: 100%;
+        }
+        
+        .info-overlay {
+             background-color: rgba(0, 0, 0, 0.6);
+        }
+
+        .screen-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10; opacity: 0;
+            pointer-events: none;
+            transform: translateZ(0); 
+        }
+        
+        @keyframes shutter-animation {
+            0% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+
+        .shutter-active {
+            background-color: black;
+            animation: shutter-animation 0.2s ease-out;
+        }
+        
+        .flash-active {
+            background-color: white;
+            animation: shutter-animation 0.4s ease-out;
+        }
+
+
+        .screen-off #screen-overlay { display: none; }
+        .screen-off { background-color: #111; }
+
+        .menu-item { display: flex; justify-content: space-between; padding: 1px 4px; }
+        .menu-item.selected { background-color: #f39c12; color: #1a1a1a; }
+        .confirm-option.selected {
+            outline: 2px solid #f39c12;
+            background-color: rgba(243, 156, 18, 0.2);
+        }
+
+        /* ✨ MODIFIED: New button style for a more refined look */
+        .control-button {
+            background: linear-gradient(145deg, #e0e0e0, #c0c0c0);
+            border: 1px solid #a0a0a0;
+            color: #2d3748;
+            transition: all 0.1s ease-in-out;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.4);
+            font-weight: bold;
+        }
+        .control-button#btn-mode {
+             background: linear-gradient(145deg, #4a5568, #2d3748);
+             border-color: #1a202c;
+             color: #e2e8f0;
+             box-shadow: 0 2px 3px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .control-button:active { 
+            background: linear-gradient(145deg, #c0c0c0, #e0e0e0);
+            transform: translateY(1px);
+            box-shadow: 0 1px 1px rgba(0,0,0,0.4), inset 0 1px 1px rgba(0,0,0,0.2);
+        }
+        .control-button#btn-mode:active {
+            background: linear-gradient(145deg, #2d3748, #4a5568);
+        }
+
+        .power-switch-track {
+            background-color: #2d3748; border-radius: 8px; padding: 4px;
+            height: 100px; width: 40px;
+            display: flex; flex-direction: column; justify-content: space-between;
+            position: relative;
+            transition: background-color 0.2s ease;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.6);
+        }
+        .power-switch-track.on {
+            background-color: #38a169;
+        }
+        .power-switch-label { color: #a0aec0; font-size: 0.8rem; font-weight: bold; text-align: center; }
+        .power-switch-slider {
+            position: absolute; height: 42px; width: 32px;
+            background: linear-gradient(145deg, #818181, #5a5a5a);
+            border: 1px solid #4a5568;
+            border-top-color: #a0aec0;
+            border-left-color: #a0aec0;
+            border-radius: 4px; transition: top 0.2s ease;
+            top: 50px; /* OFF position */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .power-switch-slider.on { top: 4px; } /* ON position */
+        
+        .play-icon {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 60px; height: 60px; background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            pointer-events: none; z-index: 5;
+        }
+        .play-icon::after {
+            content: ''; display: block; width: 0; height: 0;
+            border-top: 15px solid transparent; border-bottom: 15px solid transparent;
+            border-left: 25px solid white; margin-left: 5px;
+        }
+        
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+        .cursor {
+            background-color: #f39c12;
+            color: #1a1a1a;
+            animation: blink 1s step-end infinite;
+        }
+        .rec-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: red;
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+        .progress-bar-container {
+            border: 1px solid #fff;
+            border-radius: 2px;
+            padding: 1px;
+            height: 14px;
+            background-color: #333;
+        }
+        .progress-bar-inner {
+            background: linear-gradient(to right, #d9464f, #f59e0b);
+            height: 100%;
+        }
+
+        .guide-item {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 0.25rem;
+        }
+        .guide-label {
+            width: 4.5rem;
+            text-align: justify;
+            text-align-last: justify;
+            margin-right: 0.5rem;
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+        .guide-desc {
+            flex-grow: 1;
+        }
+        
+        .font-condensed-medium {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 500;
+        }
+        .font-condensed-semibold {
+            font-family: 'Roboto Condensed', sans-serif;
+            font-weight: 600;
+        }
+
+    </style>
+</head>
+<body class="bg-gray-800 flex items-center justify-center min-h-screen p-2 md:p-4">
+
+    <div class="w-full max-w-lg lg:max-w-xl mx-auto">
+        <!-- ✨ MODIFIED: Reverted to the original layout with a new design. -->
+        <div class="camera-body rounded-2xl p-4 shadow-2xl">
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-grow screen-container">
+                    <div class="flex justify-between items-center mb-2 text-white">
+                        <h1 class="font-bold text-lg">BROWNING</h1>
+                        <p class="text-sm">Dark Ops DCL Nano</p>
+                    </div>
+                    <div id="screen" class="screen rounded-md">
+                        <div id="screen-flash"></div>
+                        <video id="live-video" autoplay playsinline muted></video>
+                        <img id="playback-image" />
+                        <video id="playback-video" muted></video>
+                        <div id="screen-overlay"></div>
+                    </div>
+                </div>
+                <div class="flex flex-col items-center justify-between md:flex-shrink-0">
+                    <div class="grid grid-cols-3 grid-rows-3 gap-2 h-48 w-48 bg-gray-700/50 p-2 rounded-lg">
+                        <div></div>
+                        <button id="btn-up" class="control-button rounded-md text-xl">▲</button>
+                        <div></div>
+                        <button id="btn-left" class="control-button rounded-md text-xl">◄</button>
+                        <button id="btn-ok" class="control-button rounded-md font-bold">OK</button>
+                        <button id="btn-right" class="control-button rounded-md text-xl">►</button>
+                        <button id="btn-mode" class="control-button rounded-md font-bold col-span-1">M</button>
+                        <button id="btn-down" class="control-button rounded-md text-xl">▼</button>
+                        <div></div>
+                    </div>
+                    <div class="power-switch-track" id="power-switch">
+                        <span class="power-switch-label">ON</span>
+                        <div id="power-switch-slider" class="power-switch-slider"></div>
+                        <span class="power-switch-label">OFF</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="w-full max-w-lg lg:max-w-xl mx-auto text-white text-xs md:text-sm mt-4 p-2 bg-gray-900/50 rounded-lg">
+            <h3 class="font-bold text-base text-center mb-2">操作指南</h3>
+            <div class="guide-item"><strong class="text-orange-400 guide-label">電源:</strong> <span class="guide-desc">點擊右側滑塊開關。</span></div>
+            <div class="guide-item"><strong class="text-orange-400 guide-label">模式/返回:</strong> <span class="guide-desc">點擊 M 按鈕進入主選單或返回上一頁。</span></div>
+            <div class="guide-item"><strong class="text-orange-400 guide-label">導航:</strong> <span class="guide-desc">使用方向鍵 (▲ ▼ ◄ ►) 來移動游標。</span></div>
+            <div class="guide-item"><strong class="text-orange-400 guide-label">確認:</strong> <span class="guide-desc">點擊 OK 按鈕來確認選擇或進入設定。在待機/倒數時可立即拍攝。</span></div>
+            <div class="guide-item"><strong class="text-orange-400 guide-label">回放:</strong> <span class="guide-desc">在主畫面按「►」鍵進入回放模式。</span></div>
+        </div>
+    </div>
+    
+    <canvas id="capture-canvas" class="hidden"></canvas>
+
+<script type="module">
+    document.documentElement.classList.add('fonts-loading');
+
+    // --- DOM Elements ---
+    const screen = document.getElementById('screen');
+    const screenFlash = document.getElementById('screen-flash');
+    const screenOverlay = document.getElementById('screen-overlay');
+    const liveVideo = document.getElementById('live-video');
+    const playbackImage = document.getElementById('playback-image');
+    const playbackVideo = document.getElementById('playback-video');
+    const captureCanvas = document.getElementById('capture-canvas');
+    const powerSwitch = document.getElementById('power-switch');
+    const powerSwitchSlider = document.getElementById('power-switch-slider');
+    const buttons = {
+        up: document.getElementById('btn-up'), down: document.getElementById('btn-down'),
+        left: document.getElementById('btn-left'), right: document.getElementById('btn-right'),
+        ok: document.getElementById('btn-ok'), mode: document.getElementById('btn-mode'),
+    };
+
+    // --- State & Settings ---
+    let cameraState = {
+        powerOn: false,
+        currentView: 'off', // off, home, menu, playback, cameraNameSetup, dateTimeSetup, confirm, motionTest, capTimeSetup, swUpgrade
+        history: [],
+        homeStatus: 'arming', // arming, ready, delaying, capturing
+        countdownTimer: null,
+        countdownValue: 0,
+        recordingTimer: null,
+        recordingElapsed: 0,
+        burstTimer: null,
+        batteryDrainTimer: null,
+        menuIndex: 0,
+        videoStream: null,
+        cameraInitialized: false,
+        batteryLevel: 100,
+        mediaGallery: [],
+        playbackIndex: 0,
+        currentVideoUrl: null,
+        // States for editing
+        cameraNameEdit: { tempName: '', cursor: 0 },
+        dateTimeEdit: { fieldIndex: 0, values: [] },
+        capTimeEdit: { fieldIndex: 0, values: [], settingKey: null, title: '' },
+        confirmAction: { message: '', onConfirm: null, selectedIndex: 1 }
+    };
+
+    const initialSettings = {
+        'Date': '01/01/2024',
+        'Time': '12:00 AM',
+        'Mode': 'Trail',
+        'Capture Delay': '10s',
+        'PicSize': 'Medium[8MP]',
+        'MultiShot': 'Off',
+        'Cap Start': '12:00 PM',
+        'Cap End': '12:00 PM',
+        'Video Quality': 'Ultra',
+        'Video Length': '10s',
+        'Smart IR': 'On',
+        'Night Exp': 'Long Range',
+        'TL Frequency': '10s',
+        'TL Period': '3Hr',
+        'Temp Unit': 'F',
+        'Info Strip': 'On',
+        'SD Management': 'Off',
+        'Motion Detect': 'Long',
+        'Motion Test': 'OK',
+        'Name': 'TRAILCAM01',
+        'Battery Type': 'Alkaline',
+        'Language': 'English'
+    };
+    let cameraSettings = { ...initialSettings };
+
+    const menuDefs = [
+        { name: 'Date', type: 'action' }, { name: 'Time', type: 'action' },
+        { name: 'Mode', options: ['Trail', 'Video', 'Timelapse+'] },
+        { name: 'Capture Delay', options: ['1s', '5s', '10s', '20s', '30s', '1Min', '2Min', '5Min', '10Min', '30Min', '60Min'] },
+        { name: 'PicSize', options: ['Low[4MP]', 'Medium[8MP]', 'High[16MP]', 'Ultra[26MP]'] },
+        { name: 'MultiShot', options: ['Off', 'STD-2Shot', 'STD-4Shot', 'STD-8Shot', 'RPF-2Shot', 'RPF-4Shot', 'RPF-8Shot'] },
+        { name: 'Cap Start', type: 'action' },
+        { name: 'Cap End', type: 'action' },
+        { name: 'Video Quality', options: ['High', 'Ultra'] },
+        { name: 'Video Length', options: ['5s', '10s', '20s', '30s', '1Min', '2Min'] },
+        { name: 'Smart IR', options: ['On', 'Off'] },
+        { name: 'Night Exp', options: ['Pwr Save', 'Long Range', 'Fast Motion'] },
+        { name: 'TL Frequency', options: ['5s', '10s', '30s', '1Min', '2Min', '5Min', '10Min', '30Min', '60Min'] },
+        { name: 'TL Period', options: ['ALLDay', '1Hr', '2Hr', '3Hr', '4Hr'] },
+        { name: 'Temp Unit', options: ['F', 'C'] },
+        { name: 'Info Strip', options: ['On', 'Off'] },
+        { name: 'SD Management', options: ['Off', 'On'] },
+        { name: 'Motion Detect', options: ['Long', 'Normal'] },
+        { name: 'Motion Test', type: 'action' },
+        { name: 'Battery Type', options: ['Alkaline', 'NiMH', 'Lithium'] },
+        { name: 'Language', options: ['English'] },
+        { name: 'Name', type: 'action' },
+        { name: 'Default Setting', type: 'action' },
+        { name: 'Delete All', type: 'action' },
+        { name: 'SW Upgrade', type: 'action' },
+    ];
+    
+    const modeSettingsMap = {
+        'Trail': ['Capture Delay', 'PicSize', 'MultiShot', 'Smart IR', 'Night Exp', 'Motion Detect', 'Motion Test', 'Cap Start', 'Cap End'],
+        'Video': ['Capture Delay', 'Video Quality', 'Video Length', 'Smart IR', 'Night Exp', 'Motion Detect', 'Motion Test', 'Cap Start', 'Cap End'],
+        'Timelapse+': ['PicSize', 'MultiShot', 'Smart IR', 'Night Exp', 'TL Frequency', 'TL Period', 'Cap Start', 'Cap End']
+    };
+
+    // --- Camera Hardware Simulation ---
+    async function setupCamera() {
+        if (!('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices)) return;
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            cameraState.videoStream = stream;
+            liveVideo.srcObject = stream;
+            cameraState.cameraInitialized = true;
+            if (cameraState.powerOn && cameraState.currentView === 'home') toggleLiveView(true);
+        } catch (err) { console.error("無法取得攝影機:", err); }
+    }
+
+    function stopCamera() {
+        if (cameraState.videoStream) {
+            cameraState.videoStream.getTracks().forEach(track => track.stop());
+            cameraState.videoStream = null;
+            liveVideo.srcObject = null;
+            cameraState.cameraInitialized = false;
+        }
+    }
+
+    function setupPlaybackMedia() {
+        playbackImage.style.display = 'none';
+        playbackVideo.style.display = 'none';
+        playbackVideo.pause();
+
+        const { mediaGallery, playbackIndex } = cameraState;
+        if (mediaGallery.length === 0) {
+            return;
+        }
+
+        const currentMedia = mediaGallery[playbackIndex];
+
+        if (cameraState.currentVideoUrl) {
+            URL.revokeObjectURL(cameraState.currentVideoUrl);
+            cameraState.currentVideoUrl = null;
+        }
+
+        if (currentMedia.type === 'photo') {
+            playbackImage.src = currentMedia.data;
+            playbackImage.style.display = 'block';
+        } else if (currentMedia.type === 'video') {
+            cameraState.currentVideoUrl = URL.createObjectURL(currentMedia.data);
+            playbackVideo.src = cameraState.currentVideoUrl;
+            playbackVideo.style.display = 'block';
+        }
+    }
+
+    function toggleLiveView(show) {
+        playbackImage.style.display = 'none';
+        playbackVideo.style.display = 'none';
+        playbackVideo.pause();
+        liveVideo.style.display = (show && cameraState.videoStream) ? 'block' : 'none';
+    }
+
+    // --- UI Rendering ---
+    function render() {
+        if (!cameraState.powerOn) {
+            screen.classList.add('screen-off');
+            screenOverlay.innerHTML = '';
+            toggleLiveView(false);
+            return;
+        }
+        screen.classList.remove('screen-off');
+        
+        let content = '';
+        switch (cameraState.currentView) {
+            case 'home': content = renderHomeScreen(); toggleLiveView(true); break;
+            case 'menu': content = renderMenuScreen(); toggleLiveView(false); break;
+            case 'playback': content = renderPlaybackScreen(); break; 
+            case 'cameraNameSetup': content = renderCameraNameSetup(); toggleLiveView(false); break;
+            case 'dateTimeSetup': content = renderDateTimeSetup(); toggleLiveView(false); break;
+            case 'capTimeSetup': content = renderCapTimeSetupScreen(); toggleLiveView(false); break;
+            case 'motionTest': content = renderMotionTestScreen(); toggleLiveView(false); break;
+            case 'swUpgrade': content = renderSwUpgradeScreen(); toggleLiveView(false); break;
+            case 'confirm': content = renderConfirmScreen(); toggleLiveView(false); break;
+            default: content = `<div class="screen-content"></div>`; toggleLiveView(false);
+        }
+        screenOverlay.innerHTML = content;
+    }
+    
+    function renderHomeScreen() {
+        const mode = cameraSettings['Mode'];
+        let statusText;
+        if (cameraState.homeStatus === 'capturing' && mode === 'Video') {
+            statusText = `<span class="flex items-center gap-2"><span class="rec-dot"></span>${new Date(cameraState.recordingElapsed * 1000).toISOString().substr(14, 5)}</span>`;
+        } else {
+            statusText = cameraState.homeStatus === 'ready' ? 'READY' : `DLY ${cameraState.countdownValue || 0}`;
+        }
+        const photoCount = String(cameraState.mediaGallery.length).padStart(4, '0');
+        const sdCapacity = '9999';
+        return `<div class="screen-content p-2 flex flex-col justify-between font-condensed-medium text-2xl">
+            <div class="flex justify-between info-overlay px-2 rounded"><span>${mode}</span><span>${statusText}</span></div>
+            <div class="flex justify-between info-overlay px-2 rounded"><span>Bat:${cameraState.batteryLevel}%</span><span>${photoCount}/${sdCapacity}</span></div>
+        </div>`;
+    }
+
+    function isMenuItemActive(item) {
+        const commonItems = ['Date', 'Time', 'Mode', 'Temp Unit', 'Info Strip', 'SD Management', 'Battery Type', 'Language', 'Name', 'Default Setting', 'Delete All', 'SW Upgrade'];
+        if (commonItems.includes(item.name)) {
+            return true;
+        }
+        const activeForMode = modeSettingsMap[cameraSettings['Mode']];
+        return activeForMode ? activeForMode.includes(item.name) : false;
+    }
+
+    function renderMenuScreen() {
+        let itemsHtml = '';
+        const start = Math.max(0, cameraState.menuIndex - 3);
+        const end = Math.min(menuDefs.length, start + 7);
+
+        for (let i = start; i < end; i++) {
+            const item = menuDefs[i];
+            const isSelected = i === cameraState.menuIndex;
+            const isActive = isMenuItemActive(item);
+            let value = cameraSettings[item.name] || '';
+            
+            if (item.type === 'action' && ['Default Setting', 'Delete All', 'SW Upgrade', 'Motion Test'].includes(item.name)) {
+                value = 'OK';
+            }
+            
+            const inactiveClass = isActive ? '' : 'text-gray-500';
+            itemsHtml += `<li class="menu-item ${isSelected ? 'selected' : ''} ${inactiveClass}"><span>${item.name}</span><span>${value}</span></li>`;
+        }
+        return `<div class="screen-content p-2 flex flex-col bg-gray-800">
+            <h2 class="text-center font-bold border-b-2 border-gray-500 mb-1 font-condensed-semibold text-xl">Setup</h2>
+            <ul class="flex-grow overflow-hidden font-condensed-semibold text-xl">${itemsHtml}</ul>
+        </div>`;
+    }
+
+    function renderPlaybackScreen() {
+        liveVideo.style.display = 'none';
+
+        const { mediaGallery, playbackIndex } = cameraState;
+        if (mediaGallery.length === 0) {
+            return `<div class="screen-content flex items-center justify-center text-xl bg-gray-800">NO MEDIA</div>`;
+        }
+        const currentMedia = mediaGallery[playbackIndex];
+        const info = currentMedia.info;
+        
+        let videoControlsHtml = '';
+        if (currentMedia.type === 'video') {
+            let playPauseHint = '●:Play';
+            if (!playbackVideo.paused) {
+                playPauseHint = '●:Pause';
+            } else if (playbackVideo.currentTime > 0 && !playbackVideo.ended) {
+                playPauseHint = '●:Resume';
+            }
+
+            const videoTime = new Date(playbackVideo.currentTime * 1000).toISOString().substr(14, 5);
+            const videoProgress = currentMedia.duration ? (playbackVideo.currentTime / currentMedia.duration) * 100 : 0;
+            videoControlsHtml = `
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                        <div class="progress-bar-container w-16"><div class="progress-bar-inner" style="width:${videoProgress}%"></div></div>
+                        <span id="video-time" class="text-lg">${videoTime}</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span>${playPauseHint}</span>
+                    </div>
+                </div>`;
+        }
+
+        const infoStripHtml = `
+            <div class="absolute bottom-0 left-0 w-full bg-black px-1 py-0.5 flex justify-between items-center text-gray-300 font-condensed-medium" style="font-size: 11px; z-index: 3;">
+                <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <span class="whitespace-nowrap">🌡️ ${info.temp}°F</span>
+                    <span class="whitespace-nowrap">${info.pressure}inHg</span>
+                </div>
+                <div class="flex-grow text-center px-1">
+                    <span class="whitespace-nowrap">${info.name}</span>
+                </div>
+                <div class="flex items-center gap-x-1 flex-shrink-0">
+                    <span class="whitespace-nowrap">${info.moon}</span>
+                    <span class="whitespace-nowrap">${info.date}</span>
+                    <span class="whitespace-nowrap">${info.time}</span>
+                </div>
+            </div>`;
+
+        return `<div class="w-full h-full relative">
+            <div class="flex flex-col justify-between h-full pb-5">
+                <div class="flex justify-between items-center info-overlay px-2 py-1 rounded m-1 font-condensed-medium text-base">
+                    <span>◄►:Sel ▲:Del</span>
+                    <span>${playbackIndex + 1}/${mediaGallery.length}</span>
+                </div>
+                <div class="flex-grow relative">
+                    ${(currentMedia.type === 'video' && playbackVideo.paused) ? '<div class="play-icon"></div>' : ''}
+                </div>
+                ${currentMedia.type === 'video' ? 
+                    `<div class="info-overlay p-1 rounded mx-1 mb-1 font-condensed-medium text-base">
+                        ${videoControlsHtml}
+                    </div>` : '<div class="h-10"></div>'
+                }
+            </div>
+            ${infoStripHtml}
+        </div>`;
+    }
+    
+    function renderCameraNameSetup() {
+        const { tempName, cursor } = cameraState.cameraNameEdit;
+        let nameHtml = '';
+        for (let i = 0; i < tempName.length; i++) {
+            nameHtml += (i === cursor) ? `<span class="cursor">${tempName[i].replace(' ', '&nbsp;')}</span>` : `<span>${tempName[i].replace(' ', '&nbsp;')}</span>`;
+        }
+        return `<div class="screen-content bg-gray-800 p-2 flex flex-col items-center justify-center font-condensed-semibold">
+            <h2 class="text-lg text-center font-bold mb-4 w-full">CAMERA NAME</h2>
+            <div class="text-2xl tracking-widest p-2 border border-dashed border-gray-500">${nameHtml}</div>
+            <p class="text-sm mt-4">▲/▼: 變更字元, ◄/►: 移動, OK: 儲存</p>
+        </div>`;
+    }
+
+    function renderDateTimeSetup() {
+        const { fieldIndex, values } = cameraState.dateTimeEdit;
+        const [month, day, year, hour, minute, ampm] = values;
+        
+        const dateFields = [String(month).padStart(2,'0'), String(day).padStart(2,'0'), year];
+        const dateHtml = dateFields.map((val, i) => i === fieldIndex ? `<span class="cursor">${val}</span>` : val).join('/');
+        
+        const timeFields = [String(hour), String(minute).padStart(2,'0'), ampm];
+        const timeHtml = timeFields.map((val, i) => (i + 3) === fieldIndex ? `<span class="cursor">${val}</span>` : val).join(':').replace(':', ' ');
+
+        return `<div class="screen-content bg-gray-800 p-2 flex flex-col items-center justify-center font-condensed-semibold">
+            <h2 class="text-lg text-center font-bold mb-2 w-full">DATE / TIME</h2>
+            <div class="text-2xl tracking-widest p-2">${dateHtml}</div>
+            <div class="text-2xl tracking-widest p-2">${timeHtml}</div>
+            <p class="text-sm mt-4">▲/▼: 變更, ◄/►: 移動, OK: 儲存</p>
+        </div>`;
+    }
+
+    function renderCapTimeSetupScreen() {
+        const { fieldIndex, values, title } = cameraState.capTimeEdit;
+        const [hour, minute, ampm] = values;
+        
+        const timeFields = [String(hour), String(minute).padStart(2,'0'), ampm];
+        const timeHtml = timeFields.map((val, i) => i === fieldIndex ? `<span class="cursor">${val}</span>` : val).join(':').replace(':', ' ');
+
+        return `<div class="screen-content bg-gray-800 p-2 flex flex-col items-center justify-center font-condensed-semibold">
+            <h2 class="text-lg text-center font-bold mb-2 w-full">${title}</h2>
+            <div class="text-2xl tracking-widest p-2">${timeHtml}</div>
+            <p class="text-sm mt-4">▲/▼: 變更, ◄/►: 移動, OK: 儲存</p>
+        </div>`;
+    }
+
+    function renderMotionTestScreen() {
+        return `<div class="screen-content bg-gray-800 flex flex-col items-center justify-center text-center p-4 font-condensed-semibold">
+            <p class="text-lg mb-4">Motion Detecting...</p>
+            <div class="flex gap-4">
+                 <span class="p-2 confirm-option selected">Cancel</span>
+            </div>
+        </div>`;
+    }
+
+    function renderSwUpgradeScreen() {
+         return `<div class="screen-content bg-gray-800 flex flex-col items-center justify-center text-center p-4 font-condensed-semibold">
+            <p class="text-lg mb-4">臺北醫學大學 設計製作</p>
+            <div class="flex gap-4">
+                 <span class="p-2 confirm-option selected">OK</span>
+            </div>
+        </div>`;
+    }
+    
+    function renderConfirmScreen() {
+        return `<div class="screen-content bg-gray-800 flex flex-col items-center justify-center text-center p-4 font-condensed-semibold">
+            <p class="text-lg mb-4">${cameraState.confirmAction.message}</p>
+            <div class="flex gap-4">
+                <span class="p-2 confirm-option ${cameraState.confirmAction.selectedIndex === 1 ? 'selected' : ''}">Cancel</span>
+                <span class="p-2 confirm-option ${cameraState.confirmAction.selectedIndex === 0 ? 'selected' : ''}">OK</span>
+            </div>
+        </div>`;
+    }
+
+    // --- Logic & Controls ---
+    function drainBattery() {
+        if (cameraState.batteryLevel > 0) {
+            cameraState.batteryLevel--;
+            if(cameraState.currentView === 'home') {
+                render();
+            }
+        }
+    }
+
+    function handlePower() {
+        cameraState.powerOn = !cameraState.powerOn;
+        powerSwitchSlider.classList.toggle('on', cameraState.powerOn);
+        powerSwitch.classList.toggle('on', cameraState.powerOn);
+        if (cameraState.powerOn) {
+            if (!cameraState.cameraInitialized) setupCamera();
+            cameraState.batteryDrainTimer = setInterval(drainBattery, 10000);
+            changeView('home');
+        } else {
+            stopCountdown();
+            stopCamera();
+            if (cameraState.batteryDrainTimer) clearInterval(cameraState.batteryDrainTimer);
+            cameraState.batteryLevel = 100; // Reset battery on power off
+            changeView('off');
+        }
+    }
+
+    function handleMode() {
+        if (!cameraState.powerOn) return;
+        if (cameraState.history.length > 0) {
+            const lastView = cameraState.history.pop();
+            changeView(lastView);
+        } else {
+            if (cameraState.currentView === 'home') changeView('menu');
+            else if (cameraState.currentView === 'menu') changeView('home');
+            else if (cameraState.currentView === 'playback') changeView('home');
+        }
+    }
+
+    async function handleEnter() {
+        if (!cameraState.powerOn) return;
+        if (cameraState.currentView === 'home' && (cameraState.homeStatus === 'ready' || cameraState.homeStatus === 'delaying' || cameraState.homeStatus === 'arming')) {
+            triggerCapture();
+        } else if (cameraState.currentView === 'menu') {
+            const selectedItem = menuDefs[cameraState.menuIndex];
+            if (!isMenuItemActive(selectedItem)) return; 
+
+            if (selectedItem.type === 'action') {
+                if (selectedItem.name === 'Delete All') {
+                    showConfirm('Delete All', () => { cameraState.mediaGallery = []; });
+                } else if (selectedItem.name === 'Default Setting') {
+                    showConfirm('Reset Default?', () => { cameraSettings = { ...initialSettings }; });
+                } else if (selectedItem.name === 'Motion Test') {
+                    changeView('motionTest', true);
+                } else if (selectedItem.name === 'SW Upgrade') {
+                    changeView('swUpgrade', true);
+                } else if (selectedItem.name === 'Name') {
+                    cameraState.cameraNameEdit.tempName = cameraSettings['Name'].padEnd(8, ' ');
+                    cameraState.cameraNameEdit.cursor = 0;
+                    changeView('cameraNameSetup', true);
+                } else if (selectedItem.name === 'Date' || selectedItem.name === 'Time') {
+                    const [m, d, y] = cameraSettings['Date'].split('/');
+                    const timeParts = cameraSettings['Time'].split(/[: ]+/);
+                    cameraState.dateTimeEdit = {
+                        fieldIndex: (selectedItem.name === 'Date') ? 0 : 3,
+                        values: [parseInt(m), parseInt(d), parseInt(y), parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2]]
+                    };
+                    changeView('dateTimeSetup', true);
+                } else if (selectedItem.name === 'Cap Start' || selectedItem.name === 'Cap End') {
+                    const timeParts = cameraSettings[selectedItem.name].split(/[: ]+/);
+                    cameraState.capTimeEdit = {
+                        fieldIndex: 0,
+                        values: [parseInt(timeParts[0]), parseInt(timeParts[1]), timeParts[2]],
+                        settingKey: selectedItem.name,
+                        title: selectedItem.name.toUpperCase()
+                    };
+                    changeView('capTimeSetup', true);
+                }
+            }
+        } else if (cameraState.currentView === 'playback') {
+             const currentMedia = cameraState.mediaGallery[cameraState.playbackIndex];
+             if (currentMedia.type === 'video') {
+                 try {
+                     if (playbackVideo.paused) await playbackVideo.play();
+                     else playbackVideo.pause();
+                 } catch (error) {
+                     if (error.name !== 'AbortError') {
+                         console.error("Playback error:", error);
+                     }
+                 }
+             }
+        } else if (cameraState.currentView === 'cameraNameSetup') {
+            cameraSettings['Name'] = cameraState.cameraNameEdit.tempName.trim();
+            handleMode();
+        } else if (cameraState.currentView === 'dateTimeSetup') {
+            const [m, d, y, h, min, ampm] = cameraState.dateTimeEdit.values;
+            cameraSettings['Date'] = `${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}/${y}`;
+            cameraSettings['Time'] = `${String(h)}:${String(min).padStart(2,'0')} ${ampm}`;
+            handleMode();
+        } else if (cameraState.currentView === 'capTimeSetup') {
+            const { values, settingKey } = cameraState.capTimeEdit;
+            const [h, min, ampm] = values;
+            cameraSettings[settingKey] = `${String(h)}:${String(min).padStart(2,'0')} ${ampm}`;
+            handleMode();
+        } else if (cameraState.currentView === 'motionTest' || cameraState.currentView === 'swUpgrade') {
+            handleMode(); 
+        } else if (cameraState.currentView === 'confirm') {
+            if (cameraState.confirmAction.selectedIndex === 0) { // OK
+                cameraState.confirmAction.onConfirm();
+            }
+            handleMode();
+        }
+    }
+
+    function handleNav(direction) {
+        if (!cameraState.powerOn) return;
+
+        if (cameraState.currentView === 'home') {
+            if (direction === 'right' && cameraState.mediaGallery.length > 0) {
+                cameraState.playbackIndex = 0;
+                changeView('playback');
+            }
+        } else if (cameraState.currentView === 'menu') {
+            if (direction === 'up' || direction === 'down') {
+                let newIndex = cameraState.menuIndex;
+                const increment = direction === 'down' ? 1 : -1;
+                let attempts = 0;
+                do {
+                    newIndex = (newIndex + increment + menuDefs.length) % menuDefs.length;
+                    attempts++;
+                } while (!isMenuItemActive(menuDefs[newIndex]) && attempts < menuDefs.length);
+                cameraState.menuIndex = newIndex;
+            } else { 
+                const menuItem = menuDefs[cameraState.menuIndex];
+                if (isMenuItemActive(menuItem) && menuItem.options) {
+                    const currentIndex = menuItem.options.indexOf(cameraSettings[menuItem.name]);
+                    let newIndex = currentIndex;
+                    if (direction === 'left') newIndex = (currentIndex - 1 + menuItem.options.length) % menuItem.options.length;
+                    if (direction === 'right') newIndex = (currentIndex + 1) % menuItem.options.length;
+                    cameraSettings[menuItem.name] = menuItem.options[newIndex];
+                }
+            }
+        } else if (cameraState.currentView === 'playback') {
+            if (direction === 'up') {
+                showConfirm('Del', () => {
+                    cameraState.mediaGallery.splice(cameraState.playbackIndex, 1);
+                    if (cameraState.playbackIndex >= cameraState.mediaGallery.length) {
+                        cameraState.playbackIndex = Math.max(0, cameraState.mediaGallery.length - 1);
+                    }
+                    if (cameraState.mediaGallery.length === 0) {
+                        handleMode();
+                    } else {
+                        setupPlaybackMedia();
+                        render();
+                    }
+                });
+                return;
+            } else {
+                const gallerySize = cameraState.mediaGallery.length;
+                if (gallerySize > 0) {
+                    if (direction === 'left') cameraState.playbackIndex = (cameraState.playbackIndex - 1 + gallerySize) % gallerySize;
+                    if (direction === 'right') cameraState.playbackIndex = (cameraState.playbackIndex + 1) % gallerySize;
+                    setupPlaybackMedia();
+                }
+            }
+        } else if (cameraState.currentView === 'cameraNameSetup') {
+            handleCameraNameEdit(direction);
+        } else if (cameraState.currentView === 'dateTimeSetup') {
+            handleDateTimeEdit(direction);
+        } else if (cameraState.currentView === 'capTimeSetup') {
+            handleCapTimeEdit(direction);
+        } else if (cameraState.currentView === 'confirm') {
+            if (direction === 'left' || direction === 'right') {
+                cameraState.confirmAction.selectedIndex = 1 - cameraState.confirmAction.selectedIndex;
+            }
+        }
+        
+        render();
+    }
+    
+    function handleCameraNameEdit(direction) {
+        const nameState = cameraState.cameraNameEdit;
+        const maxLen = 8;
+        if (direction === 'left') nameState.cursor = Math.max(0, nameState.cursor - 1);
+        else if (direction === 'right') nameState.cursor = Math.min(maxLen - 1, nameState.cursor + 1);
+        else {
+            const chars = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const currentChr = nameState.tempName[nameState.cursor];
+            const currentIndex = chars.indexOf(currentChr);
+            const change = direction === 'up' ? 1 : -1;
+            const newIndex = (currentIndex + change + chars.length) % chars.length;
+            let nameArr = nameState.tempName.split('');
+            nameArr[nameState.cursor] = chars[newIndex];
+            nameState.tempName = nameArr.join('');
+        }
+    }
+
+    function handleDateTimeEdit(direction) {
+        const dt = cameraState.dateTimeEdit;
+        const maxFields = 6;
+        if (direction === 'left') dt.fieldIndex = (dt.fieldIndex - 1 + maxFields) % maxFields;
+        else if (direction === 'right') dt.fieldIndex = (dt.fieldIndex + 1) % maxFields;
+        else {
+            const change = direction === 'up' ? 1 : -1;
+            let [m, d, y, h, min, ampm] = dt.values;
+            
+            switch(dt.fieldIndex) {
+                case 0: m = (m + change - 1 + 12) % 12 + 1; break;
+                case 1: 
+                    const daysInMonth = new Date(y, m, 0).getDate();
+                    d = (d + change - 1 + daysInMonth) % daysInMonth + 1;
+                    break;
+                case 2: y += change; if (y < 1970) y = new Date().getFullYear(); break;
+                case 3: h = (h + change - 1 + 12) % 12 + 1; break;
+                case 4: min = (min + change + 60) % 60; break;
+                case 5: ampm = (ampm === 'AM') ? 'PM' : 'AM'; break;
+            }
+            dt.values = [m, d, y, h, min, ampm];
+        }
+    }
+
+    function handleCapTimeEdit(direction) {
+        const ct = cameraState.capTimeEdit;
+        const maxFields = 3;
+        if (direction === 'left') ct.fieldIndex = (ct.fieldIndex - 1 + maxFields) % maxFields;
+        else if (direction === 'right') ct.fieldIndex = (ct.fieldIndex + 1) % maxFields;
+        else {
+            const change = direction === 'up' ? 1 : -1;
+            let [h, min, ampm] = ct.values;
+            
+            switch(ct.fieldIndex) {
+                case 0: h = (h + change - 1 + 12) % 12 + 1; break;
+                case 1: min = (min + change + 60) % 60; break;
+                case 2: ampm = (ampm === 'AM') ? 'PM' : 'AM'; break;
+            }
+            ct.values = [h, min, ampm];
+        }
+    }
+
+    function changeView(newView, recordHistory = false) {
+        if (recordHistory) cameraState.history.push(cameraState.currentView);
+        
+        if (cameraState.currentView === 'playback' && cameraState.currentVideoUrl) {
+            URL.revokeObjectURL(cameraState.currentVideoUrl);
+            cameraState.currentVideoUrl = null;
+        }
+
+        cameraState.currentView = newView;
+
+        if (newView === 'playback') {
+            setupPlaybackMedia();
+        } else if (newView === 'home') {
+            startArmingCountdown(10);
+        } else {
+            stopCountdown();
+        }
+
+        render();
+    }
+    
+    function showConfirm(message, onConfirm) {
+        cameraState.confirmAction = { message, onConfirm, selectedIndex: 1 };
+        changeView('confirm', true);
+    }
+
+    // --- Timers & Capture ---
+    function stopCountdown() {
+        if (cameraState.countdownTimer) clearInterval(cameraState.countdownTimer);
+        cameraState.countdownTimer = null;
+        if (cameraState.recordingTimer) clearInterval(cameraState.recordingTimer);
+        cameraState.recordingTimer = null;
+        if (cameraState.burstTimer) {
+            clearInterval(cameraState.burstTimer);
+            cameraState.burstTimer = null;
+        }
+    }
+
+    function startArmingCountdown(initialValue) {
+        stopCountdown();
+        cameraState.homeStatus = 'arming';
+        cameraState.countdownValue = initialValue;
+        render(); 
+        
+        cameraState.countdownTimer = setInterval(() => {
+            if (!cameraState.powerOn || cameraState.currentView !== 'home') {
+                stopCountdown();
+                return;
+            }
+            cameraState.countdownValue--;
+            if (cameraState.countdownValue < 0) {
+                stopCountdown();
+                cameraState.homeStatus = 'ready';
+            }
+            render();
+        }, 1000);
+    }
+    
+    function startDelayCountdown() {
+        const delayStr = cameraSettings['Capture Delay'];
+        const value = parseInt(delayStr);
+        const delaySec = delayStr.toLowerCase().includes('min') ? value * 60 : value;
+        
+        stopCountdown();
+        cameraState.homeStatus = 'delaying';
+        cameraState.countdownValue = delaySec;
+        render();
+
+        cameraState.countdownTimer = setInterval(() => {
+             if (!cameraState.powerOn || cameraState.currentView !== 'home') {
+                 stopCountdown();
+                 return;
+             }
+             cameraState.countdownValue--;
+             if (cameraState.countdownValue < 0) {
+                 stopCountdown();
+                 cameraState.homeStatus = 'ready';
+             }
+             render();
+        }, 1000);
+    }
+    
+    function generateCaptureInfo() {
+        const tempF = Math.floor(Math.random() * 30 + 50);
+        const pressure = (Math.random() * (30.5 - 29.5) + 29.5).toFixed(2);
+        const moonPhase = ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'][Math.floor(Math.random() * 8)];
+        return {
+            batteryLevel: cameraState.batteryLevel,
+            temp: tempF,
+            pressure: pressure,
+            moon: moonPhase,
+            date: cameraSettings['Date'],
+            time: cameraSettings['Time'],
+            name: cameraSettings['Name']
+        };
+    }
+
+    function triggerCapture() {
+        if (cameraState.homeStatus === 'capturing' || !cameraState.videoStream) return;
+        stopCountdown();
+        cameraState.homeStatus = 'capturing';
+        render();
+
+        const mode = cameraSettings['Mode'];
+        if (mode === 'Video') captureVideo();
+        else capturePhoto();
+    }
+
+    function capturePhoto() {
+        const multiShotSetting = cameraSettings['MultiShot'];
+        let shotCount = 1, interval = 2000;
+        if (multiShotSetting !== 'Off') {
+            const match = multiShotSetting.match(/\d+/);
+            if (match) {
+                shotCount = parseInt(match[0]);
+            }
+            if (multiShotSetting.startsWith('RPF')) interval = 300;
+        }
+
+        let count = 0;
+        cameraState.burstTimer = setInterval(() => {
+            if (count >= shotCount) {
+                clearInterval(cameraState.burstTimer);
+                cameraState.burstTimer = null;
+                startDelayCountdown();
+                return;
+            }
+            
+            const animationClass = 'shutter-active';
+            
+            liveVideo.style.display = 'none';
+
+            screenFlash.classList.add(animationClass);
+            screenFlash.addEventListener('animationend', () => {
+                screenFlash.classList.remove(animationClass);
+                liveVideo.style.display = 'block';
+            }, { once: true });
+
+            const ctx = captureCanvas.getContext('2d');
+            captureCanvas.width = liveVideo.videoWidth;
+            captureCanvas.height = liveVideo.videoHeight;
+            ctx.drawImage(liveVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+
+            if (cameraSettings['Info Strip'] === 'On') {
+                const info = generateCaptureInfo();
+                const canvasHeight = captureCanvas.height;
+                const canvasWidth = captureCanvas.width;
+                
+                const fontSize = Math.round(canvasHeight / 28);
+                const padding = Math.round(fontSize / 2);
+                const stripHeight = fontSize + padding * 2;
+                const yPos = canvasHeight - padding;
+
+                ctx.font = `${fontSize}px 'Roboto Mono', monospace`;
+
+                ctx.fillStyle = 'black';
+                ctx.fillRect(0, canvasHeight - stripHeight, canvasWidth, stripHeight);
+
+                ctx.fillStyle = 'white';
+
+                const leftText = `🌡️ ${info.temp}°F  ${info.pressure}inHg`;
+                ctx.textAlign = 'left';
+                ctx.fillText(leftText, padding, yPos);
+
+                const centerText = info.name;
+                ctx.textAlign = 'center';
+                ctx.fillText(centerText, canvasWidth / 2, yPos);
+
+                const rightText = `${info.moon}  ${info.date}  ${info.time}`;
+                ctx.textAlign = 'right';
+                ctx.fillText(rightText, canvasWidth - padding, yPos);
+            }
+
+            const dataUrl = captureCanvas.toDataURL('image/jpeg');
+            cameraState.mediaGallery.push({ type: 'photo', data: dataUrl, info: generateCaptureInfo() });
+            downloadFile(dataUrl, `Browning_Photo_${Date.now()}.jpg`);
+            count++;
+        }, interval);
+    }
+    
+    function captureVideo() {
+        const durationStr = cameraSettings['Video Length'];
+        const value = parseInt(durationStr);
+        const durationSec = durationStr.toLowerCase().includes('min') ? value * 60 : value;
+        const durationMs = durationSec * 1000;
+
+        cameraState.recordingElapsed = 0;
+        cameraState.recordingTimer = setInterval(() => {
+            cameraState.recordingElapsed++;
+            render();
+        }, 1000);
+
+        const recorder = new MediaRecorder(cameraState.videoStream);
+        const chunks = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+            stopCountdown();
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            cameraState.mediaGallery.push({ 
+                type: 'video', 
+                data: blob, 
+                info: generateCaptureInfo(),
+                duration: durationSec 
+            });
+            
+            const videoUrl = URL.createObjectURL(blob);
+            downloadFile(videoUrl, `Browning_Video_${Date.now()}.webm`);
+
+            startDelayCountdown();
+        };
+        recorder.start();
+        setTimeout(() => recorder.stop(), durationMs);
+    }
+    
+    function downloadFile(url, filename) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    // --- Event Listeners ---
+    powerSwitch.addEventListener('click', handlePower);
+    Object.keys(buttons).forEach(key => {
+        buttons[key].addEventListener('click', () => {
+            if(key === 'up') handleNav('up');
+            if(key === 'down') handleNav('down');
+            if(key === 'left') handleNav('left');
+            if(key === 'right') handleNav('right');
+            if(key === 'ok') handleEnter();
+            if(key === 'mode') handleMode();
+        });
+    });
+    
+    playbackVideo.addEventListener('play', () => {
+        if (cameraState.currentView === 'playback') render();
+    });
+    playbackVideo.addEventListener('pause', () => {
+        if (cameraState.currentView === 'playback') render();
+    });
+    playbackVideo.addEventListener('timeupdate', () => {
+        if (cameraState.currentView === 'playback') render();
+    });
+    playbackVideo.addEventListener('ended', () => {
+        if (cameraState.currentView === 'playback') render();
+    });
+
+    // ✨ ADDED: Logic to prevent font flash on startup.
+    document.fonts.ready.then(() => {
+        document.documentElement.classList.remove('fonts-loading');
+    });
+
+    // Initial Render
+    render();
+</script>
+
+</body>
+</html>
