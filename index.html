@@ -1224,12 +1224,18 @@
             render();
         }, 1000);
 
-        const recorder = new MediaRecorder(cameraState.videoStream);
+        const options = { mimeType: 'video/mp4' };
+        const recorder = MediaRecorder.isTypeSupported(options.mimeType)
+            ? new MediaRecorder(cameraState.videoStream, options)
+            : new MediaRecorder(cameraState.videoStream);
+        
+        const fileExtension = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+
         const chunks = [];
         recorder.ondataavailable = e => chunks.push(e.data);
         recorder.onstop = () => {
             stopCountdown();
-            const blob = new Blob(chunks, { type: 'video/webm' });
+            const blob = new Blob(chunks, { type: recorder.mimeType });
             cameraState.mediaGallery.push({ 
                 type: 'video', 
                 data: blob, 
@@ -1238,7 +1244,7 @@
             });
             
             const videoUrl = URL.createObjectURL(blob);
-            downloadFile(videoUrl, `Browning_Video_${Date.now()}.webm`);
+            downloadFile(videoUrl, `Browning_Video_${Date.now()}.${fileExtension}`);
 
             startDelayCountdown();
         };
